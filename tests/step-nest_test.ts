@@ -32,7 +32,6 @@ Clarinet.test({
   async fn(chain: Chain, accounts: Map<string, Account>) {
     const wallet_1 = accounts.get("wallet_1")!;
     
-    // First create a route
     let block1 = chain.mineBlock([
       Tx.contractCall("step-nest", "create-route", [
         types.utf8("Mountain Trail"),
@@ -42,7 +41,6 @@ Clarinet.test({
       ], wallet_1.address)
     ]);
     
-    // Then complete it
     let block2 = chain.mineBlock([
       Tx.contractCall("step-nest", "complete-route", [
         types.uint(1)
@@ -55,11 +53,11 @@ Clarinet.test({
 });
 
 Clarinet.test({
-  name: "Ensure users can only rate routes they have completed",
+  name: "Ensure users can only rate routes once",
   async fn(chain: Chain, accounts: Map<string, Account>) {
     const wallet_1 = accounts.get("wallet_1")!;
     
-    // Create route
+    // Create and complete route
     let block1 = chain.mineBlock([
       Tx.contractCall("step-nest", "create-route", [
         types.utf8("Mountain Trail"),
@@ -69,14 +67,13 @@ Clarinet.test({
       ], wallet_1.address)
     ]);
     
-    // Complete route
     let block2 = chain.mineBlock([
       Tx.contractCall("step-nest", "complete-route", [
         types.uint(1)
       ], wallet_1.address)
     ]);
     
-    // Rate route
+    // First rating should succeed
     let block3 = chain.mineBlock([
       Tx.contractCall("step-nest", "rate-route", [
         types.uint(1),
@@ -84,7 +81,15 @@ Clarinet.test({
       ], wallet_1.address)
     ]);
     
-    assertEquals(block3.receipts.length, 1);
+    // Second rating should fail
+    let block4 = chain.mineBlock([
+      Tx.contractCall("step-nest", "rate-route", [
+        types.uint(1),
+        types.uint(4)
+      ], wallet_1.address)
+    ]);
+    
     assertEquals(block3.receipts[0].result, "(ok true)");
+    assertEquals(block4.receipts[0].result.includes("err-already-rated"), true);
   },
 });
