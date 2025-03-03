@@ -9,6 +9,7 @@
 (define-constant err-invalid-rating (err u103))
 (define-constant err-not-completed (err u104))
 (define-constant err-invalid-params (err u105))
+(define-constant err-already-rated (err u106))
 
 ;; Data variables
 (define-data-var next-route-id uint u1)
@@ -32,6 +33,19 @@
   { completed: bool }
 )
 
+(define-map user-ratings
+  { user: principal, route-id: uint }
+  { rating: uint }
+)
+
+;; Events
+(define-public (print-route-created (route-id uint))
+  (ok (print { event: "route-created", route-id: route-id, creator: tx-sender })))
+
+;; Read-only functions
+(define-read-only (get-route (route-id uint))
+  (map-get? routes { route-id: route-id }))
+
 ;; Route creation
 (define-public (create-route (name (string-utf8 100)) (description (string-utf8 500)) (difficulty uint) (length uint))
   (begin
@@ -51,6 +65,7 @@
         }
       )
       (var-set next-route-id (+ route-id u1))
+      (try! (print-route-created route-id))
       (ok route-id))))
 
 ;; Complete route
@@ -69,12 +84,14 @@
     (completed (unwrap! (map-get? completed-routes { user: tx-sender, route-id: route-id }) 
       (err err-not-completed)))
   )
+    (asserts! (is-none (map-get? user-ratings { user: tx-sender, route-id: route-id }))
+      (err err-already-rated))
     (asserts! (and (>= rating u1) (<= rating u5)) (err err-invalid-rating))
     (asserts! completed (err err-not-completed))
     (let (
       (current-total (* (get rating route) (get total-ratings route)))
       (new-total-ratings (+ (get total-ratings route) u1))
-      (new-rating (/ (+ current-total rating) new-total-ratings))
+      (new-rating (/ (+ current-total (* rating u100)) (* new-total-ratings u100)))
     )
       (map-set routes
         { route-id: route-id }
@@ -82,5 +99,9 @@
           rating: new-rating,
           total-ratings: new-total-ratings
         })
+      )
+      (map-set user-ratings
+        { user: tx-sender, route-id: route-id }
+        { rating: rating }
       )
       (ok true))))
